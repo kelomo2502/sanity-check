@@ -3,38 +3,19 @@ name: Deploy Identity Service to ECS
 on:
   push:
     branches: [ main, develop ]
-  pull_request:
-    branches: [ main ]
 
 env:
   AWS_REGION: us-east-1
-  ECR_REPOSITORY: luralite-identity-svc
-  ECS_SERVICE: identity-service
-  ECS_CLUSTER: luralite-cluster
+  ECR_REPOSITORY: luralite/staging/identity-svc
+  ECS_SERVICE: luralite-staging-identity-svc-service
+  ECS_CLUSTER: luralite-staging-cluster
   CONTAINER_NAME: identity-svc
+  TASK_DEFINITION: luralite-staging-identity-svc
 
 jobs:
-  test:
-    name: Test
-    runs-on: ubuntu-latest
-    
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-        cache: 'npm'
-
-    - name: Install dependencies
-      run: npm ci
-
   deploy:
     name: Deploy to ECS
     runs-on: ubuntu-latest
-    needs: test
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
     
     steps:
@@ -62,28 +43,31 @@ jobs:
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
         echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
-    - name: Download task definition
+    - name: Download current task definition from ECS
       run: |
         aws ecs describe-task-definition \
-          --task-definition luralite-identity-svc \
+          --task-definition ${{ env.TASK_DEFINITION }} \
           --query taskDefinition \
-          --region $AWS_REGION > task-definition.json
+          --region ${{ env.AWS_REGION }} > task-definition.json
 
-    - name: Fill in the new image ID in the Amazon ECS task definition
-      id: task-def
+    - name: Render new task definition with updated image
+      id: render-task-def
       uses: aws-actions/amazon-ecs-render-task-definition@v1
       with:
         task-definition: task-definition.json
         container-name: ${{ env.CONTAINER_NAME }}
         image: ${{ steps.build-image.outputs.image }}
 
-    - name: Deploy Amazon ECS task definition
+    - name: Deploy to ECS
       uses: aws-actions/amazon-ecs-deploy-task-definition@v1
       with:
-        task-definition: ${{ steps.task-def.outputs.task-definition }}
+        task-definition: ${{ steps.render-task-def.outputs.task-definition }}
         service: ${{ env.ECS_SERVICE }}
         cluster: ${{ env.ECS_CLUSTER }}
         wait-for-service-stability: true
+
+    - name: Clean up temporary task definition file
+      run: rm -f task-definition.json
 
     - name: Verify deployment
       run: |
@@ -93,4 +77,4 @@ jobs:
           --cluster ${{ env.ECS_CLUSTER }} \
           --services ${{ env.ECS_SERVICE }} \
           --region ${{ env.AWS_REGION }} \
-          --query 'services[0].[status,runningCount,desiredCount]
+          --query 'services[0].[status,runningCount,desiredCount]'
