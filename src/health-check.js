@@ -1,8 +1,11 @@
 const http = require('http');
 
+const port = process.env.PORT || 8080;
+const hostname = process.env.HOSTNAME || 'localhost';
+
 const options = {
-  hostname: 'localhost',
-  port: 8080,
+  hostname: hostname,
+  port: port,
   path: '/health',
   method: 'GET',
   timeout: 2000
@@ -10,17 +13,21 @@ const options = {
 
 const req = http.request(options, (res) => {
   if (res.statusCode === 200) {
+    console.log('Health check passed');
     process.exit(0);
   } else {
+    console.log(`Health check failed with status: ${res.statusCode}`);
     process.exit(1);
   }
 });
 
-req.on('error', () => {
+req.on('error', (err) => {
+  console.log('Health check error:', err.message);
   process.exit(1);
 });
 
 req.on('timeout', () => {
+  console.log('Health check timeout');
   process.exit(1);
 });
 
