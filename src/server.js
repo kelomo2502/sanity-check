@@ -10,7 +10,8 @@ app.get('/health', (req, res) => {
   res.status(200).json({
     status: 'OK',
     timestamp: new Date().toISOString(),
-    service: 'identity-service'
+    service: 'identity-service',
+    version: '1.0.0'
   });
 });
 
@@ -19,7 +20,8 @@ app.get('/api/v1/identity/user', (req, res) => {
   res.json({
     message: 'Identity Service is working!',
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development'
+    environment: process.env.NODE_ENV || 'development',
+    version: '1.0.0'
   });
 });
 
