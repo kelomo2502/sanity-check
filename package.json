@@ -29,7 +29,8 @@
     "testEnvironment": "node",
     "coverageDirectory": "coverage",
     "collectCoverageFrom": [
-      "src/**/*.js"
+      "src/**/*.js",
+      "!src/health-check.js"
     ],
     "testTimeout": 10000
   },

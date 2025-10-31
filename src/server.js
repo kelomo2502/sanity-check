@@ -27,11 +27,12 @@ app.get('/api/v1/identity/user', (req, res) => {
 if (process.env.NODE_ENV !== 'test') {
   const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`Identity Service running on port ${PORT}`);
-    console.log(`Environment: ${process.env.NODE_ENV}`);
+    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
   });
   
-  module.exports = app;
+  // Export both app and server for testing
+  module.exports = { app, server };
 } else {
   // For test environment, export app without starting server
-  module.exports = app;
+  module.exports = { app };
 }

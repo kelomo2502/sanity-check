@@ -1,5 +1,5 @@
 const request = require('supertest');
-const app = require('./server');
+const { app } = require('./server');
 
 describe('Identity Service', () => {
   it('should respond to health check', async () => {
