@@ -13,9 +13,40 @@ env:
   TASK_DEFINITION: luralite-staging-identity-svc
 
 jobs:
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Build Docker image
+      run: docker build -t $ECR_REPOSITORY:${{ github.sha }} .
+
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: '$ECR_REPOSITORY:${{ github.sha }}'
+        format: 'table'
+        exit-code: 1
+        ignore-unfixed: true
+        severity: 'CRITICAL,HIGH'
+
+    - name: Run Trivy filesystem scan
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'table'
+        exit-code: 1
+        ignore-unfixed: true
+        severity: 'CRITICAL,HIGH'
+
   deploy:
     name: Deploy to ECS
     runs-on: ubuntu-latest
+    needs: security-scan
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
     
     steps:
@@ -40,41 +71,9 @@ jobs:
         IMAGE_TAG: ${{ github.sha }}
       run: |
         docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+        
+        # Scan the final image before pushing
+        echo "Running final security scan before push..."
+        trivy image --exit-code 0 --severity CRITICAL,HIGH $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-        echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
-
-    - name: Download current task definition from ECS
-      run: |
-        aws ecs describe-task-definition \
-          --task-definition ${{ env.TASK_DEFINITION }} \
-          --query taskDefinition \
-          --region ${{ env.AWS_REGION }} > task-definition.json
-
-    - name: Render new task definition with updated image
-      id: render-task-def
-      uses: aws-actions/amazon-ecs-render-task-definition@v1
-      with:
-        task-definition: task-definition.json
-        container-name: ${{ env.CONTAINER_NAME }}
-        image: ${{ steps.build-image.outputs.image }}
-
-    - name: Deploy to ECS
-      uses: aws-actions/amazon-ecs-deploy-task-definition@v1
-      with:
-        task-definition: ${{ steps.render-task-def.outputs.task-definition }}
-        service: ${{ env.ECS_SERVICE }}
-        cluster: ${{ env.ECS_CLUSTER }}
-        wait-for-service-stability: true
-
-    - name: Clean up temporary task definition file
-      run: rm -f task-definition.json
-
-    - name: Verify deployment
-      run: |
-        echo "Waiting for service to stabilize..."
-        sleep 30
-        aws ecs describe-services \
-          --cluster ${{ env.ECS_CLUSTER }} \
-          --services ${{ env.ECS_SERVICE }} \
-          --region ${{ env.AWS_REGION }} \
-          --query 'services[0].[status,runningCount,desiredCount]'
