@@ -1,0 +1,45 @@
+name: CI - Node.js App
+
+on:
+  push:
+    branches: staging
+  pull_request:
+    branches: staging
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]  # You can adjust versions based on what you support
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run lint
+        run: npm run lint --if-present
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build project
+        run: npm run build --if-present
+
+      - name: Upload test coverage (optional)
+        if: success()
+        run: |
+          echo "Upload coverage report here if you use Coveralls or Codecov"
+          # Example:
+          # npm install -g codecov
+          # codecov
